@@ -7,7 +7,7 @@ from glue.core import BaseCartesianData, DataCollection, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
 from glue.app.qt import GlueApplication
-
+from glue_vispy_viewers.volume.volume_viewer import VispyVolumeViewer
 
 def _steps(slice):
     return int(np.ceil(1. * (slice.stop - slice.start) / slice.step))
@@ -54,6 +54,7 @@ class YTGlueData(BaseCartesianData):
         return self._world_component_ids
 
     _shape = None
+
     @property
     def shape(self):
         if self._shape is None:
@@ -67,8 +68,12 @@ class YTGlueData(BaseCartesianData):
 
     def get_mask(self, subset_state, view=None):
         breakpoint()
-    def _get_loc(self, idx):
-        return self._left_edge + idx*self._dds
+
+    def _get_loc(self, global_index, ax=None):
+        ret = self._left_edge + global_index*self._dds
+        if ax is None:
+            return ret
+        return ret[ax]
 
     def _slice_args(self, view):
         index, coord = [(i, v) for i, v in enumerate(view)
@@ -92,15 +97,26 @@ class YTGlueData(BaseCartesianData):
         return bounds, (h, w)
 
     def get_data(self, cid, view=None):
-        nd = len([v for v in view if isinstance(v, slice)])
+        if view is None:
+            nd = self.ndim
+        else:
+            nd = len([v for v in view if isinstance(v, slice)])
         field = tuple(cid.label.split())
         if nd == 2:
             axis, coord = self._slice_args(view)
             sl = self.ds.slice(axis, coord)
             frb = FixedResolutionBuffer(sl, *self._frb_args(view, axis))
             return frb[field].d.T
-        else:
-            return np.squeeze(self.grid[field][view].d)
+        elif nd == 3:
+            le = []
+            re = []
+            shape = []
+            for i, v in enumerate(view):
+                le.append(self._get_loc(v.start, i))
+                re.append(self._get_loc(v.stop, i))
+                shape.append((v.stop - v.start)//v.step)
+            ag = self.ds.arbitrary_grid(le, re, shape)
+            return ag[field].d
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
@@ -154,7 +170,8 @@ if __name__ == "__main__":
     ds.add_field(('gas', 'logtemperature'), function=logtemperature, units='',
                  sampling_type='cell')
     d1 = YTGlueData(ds)
-    d2 = YTGlueData(ds)
-    dc = DataCollection([d1, d2])
+    dc = DataCollection([d1])
     ga = GlueApplication(dc)
+    viewer = ga.new_data_viewer(VispyVolumeViewer)
+    viewer.add_data(d1)
     ga.start(maximized=False)
