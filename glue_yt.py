@@ -14,7 +14,7 @@ class YTGlueData(BaseCartesianData):
         super(YTGlueData, self).__init__()
         self.ds = ds
         self.grid = ds.arbitrary_grid(
-            ds.domain_left_edge, ds.domain_right_edge, (512,)*3)
+            ds.domain_left_edge, ds.domain_right_edge, (256,)*3)
         self.region = ds.box(ds.domain_left_edge, ds.domain_right_edge)
         self.cids = [
             ComponentID('{} {}'.format(*f.name), parent=self)
@@ -27,7 +27,7 @@ class YTGlueData(BaseCartesianData):
         w.wcs.cdelt = self.grid.dds.in_units('kpc').d
         w.wcs.crval = c.d
         self.coords = coordinates_from_wcs(w)
-        self._shape = (512,)*3
+        self._shape = (256,)*3
         wcids = []
         for i in range(self.ndim):
             label = self.coords.axis_label(i)
