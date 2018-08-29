@@ -28,6 +28,11 @@ class YTGlueData(BaseCartesianData):
         w.wcs.crval = c.d
         self.coords = coordinates_from_wcs(w)
         self._shape = (512,)*3
+        wcids = []
+        for i in range(self.ndim):
+            label = self.coords.axis_label(i)
+            wcids.append(ComponentID(label, parent=self))
+        self._world_component_ids = wcids
 
     @property
     def label(self):
@@ -36,6 +41,10 @@ class YTGlueData(BaseCartesianData):
     @property
     def main_components(self):
         return self.cids
+
+    @property
+    def world_component_ids(self):
+        return self._world_component_ids
 
     @property
     def shape(self):
