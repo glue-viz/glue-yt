@@ -16,6 +16,7 @@ class YTGlueData(BaseCartesianData):
         self.grid = ds.arbitrary_grid(
             ds.domain_left_edge, ds.domain_right_edge, (256,)*3)
         self.region = ds.box(ds.domain_left_edge, ds.domain_right_edge)
+        self.region = ds.all_data()
         self.cids = [
             ComponentID('{} {}'.format(*f.name), parent=self)
             for f in ds.fields.gas]
