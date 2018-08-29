@@ -2,10 +2,15 @@ import astropy
 import yt
 import numpy as np
 
+from yt.visualization.fixed_resolution import FixedResolutionBuffer
 from glue.core import BaseCartesianData, DataCollection, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
 from glue.app.qt import GlueApplication
+
+
+def _steps(slice):
+    return int(np.ceil(1. * (slice.stop - slice.start) / slice.step))
 
 
 class YTGlueData(BaseCartesianData):
@@ -33,6 +38,9 @@ class YTGlueData(BaseCartesianData):
             label = self.coords.axis_label(i)
             wcids.append(ComponentID(label, parent=self))
         self._world_component_ids = wcids
+        self._dds = (ds.domain_width / self.shape).to_value("code_length")
+        self._left_edge = self.ds.domain_left_edge.to_value("code_length")
+        self._right_edge = self.ds.domain_right_edge.to_value("code_length")
 
     @property
     def label(self):
@@ -60,10 +68,40 @@ class YTGlueData(BaseCartesianData):
 
     def get_mask(self, subset_state, view=None):
         breakpoint()
+    def _get_loc(self, idx):
+        return self._left_edge + idx*self._dds
+
+    def _slice_args(self, view):
+        index, coord = [(i, v) for i, v in enumerate(view)
+                        if not isinstance(v, slice)][0]
+        coord = self._get_loc(coord)[index]
+        return index, coord
+
+    def _frb_args(self, view, axis):
+        ix = self.ds.coordinates.x_axis[axis]
+        iy = self.ds.coordinates.y_axis[axis]
+        sx = view[ix]
+        sy = view[iy]
+        l, r = sx.start, sx.stop
+        b, t = sy.start, sy.stop
+        w = _steps(sx)
+        h = _steps(sy)
+        bounds = (self._dds[ix]*l + self._left_edge[ix],
+                  self._dds[ix]*r + self._left_edge[ix],
+                  self._dds[iy]*b + self._left_edge[iy],
+                  self._dds[iy]*t + self._left_edge[iy])
+        return bounds, (h, w)
 
     def get_data(self, cid, view=None):
+        nd = len([v for v in view if isinstance(v, slice)])
         field = tuple(cid.label.split())
-        return np.squeeze(self.grid[field][view].d)
+        if nd == 2:
+            axis, coord = self._slice_args(view)
+            sl = self.ds.slice(axis, coord)
+            frb = FixedResolutionBuffer(sl, *self._frb_args(view, axis))
+            return frb[field].d.T
+        else:
+            return np.squeeze(self.grid[field][view].d)
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
