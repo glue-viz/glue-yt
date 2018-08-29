@@ -107,17 +107,17 @@ class YTGlueData(BaseCartesianData):
                           view=None, random_subset=None):
         field = tuple(cid.label.split())
         if statistic == 'minimum':
-            return float(self.grid[field].min(axis=axis))
+            return float(self.region.min(field))
         elif statistic == 'maximum':
-            return float(self.grid[field].max(axis=axis))
+            return float(self.region.max(field))
         elif statistic == 'mean':
-            return float(np.mean(self.grid[field], axis=axis))
+            return float(self.region.mean(field))
         elif statistic == 'median':
-            return float(np.median(self.grid[field], axis=axis))
+            return float(np.median(self.region[field]))
         elif statistic == 'sum':
-            return float(np.sum(self.grid[field], axis=axis))
+            return float(self.region.sum(field))
         elif statistic == 'percentile':
-            return float(np.percentile(self.grid[field], percentile, axis=axis))
+            return float(np.percentile(self.region[field], percentile))
 
     def compute_histogram(self, cids, range=None, bins=None, log=None,
                           subset_state=None):
