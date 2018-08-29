@@ -27,7 +27,6 @@ class YTGlueData(BaseCartesianData):
         w.wcs.cdelt = self.grid.dds.in_units('kpc').d
         w.wcs.crval = c.d
         self.coords = coordinates_from_wcs(w)
-        self._shape = (256,)*3
         wcids = []
         for i in range(self.ndim):
             label = self.coords.axis_label(i)
@@ -46,8 +45,13 @@ class YTGlueData(BaseCartesianData):
     def world_component_ids(self):
         return self._world_component_ids
 
+    _shape = None
     @property
     def shape(self):
+        if self._shape is None:
+            refine_factor = self.ds.refine_by**self.ds.index.max_level
+            shp = refine_factor * self.ds.domain_dimensions
+            self._shape = tuple(shp.astype("int"))
         return self._shape
 
     def get_kind(self, cid):
