@@ -2,44 +2,43 @@ import astropy
 import yt
 import numpy as np
 
-from yt.visualization.fixed_resolution import FixedResolutionBuffer
 from glue.core import BaseCartesianData, DataCollection, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
 from glue.app.qt import GlueApplication
-from glue_vispy_viewers.volume.volume_viewer import VispyVolumeViewer
-
-def _steps(slice):
-    return int(np.ceil(1. * (slice.stop - slice.start) / slice.step))
 
 
 class YTGlueData(BaseCartesianData):
 
-    def __init__(self, ds):
+    def __init__(self, ds, units=None, level_decrement=None):
         super(YTGlueData, self).__init__()
         self.ds = ds
-        self.grid = ds.arbitrary_grid(
-            ds.domain_left_edge, ds.domain_right_edge, (256,)*3)
+        if units is None:
+            self.units = ds.get_smallest_appropriate_unit(ds.domain_width[0])
+        else:
+            self.units = units
+        if level_decrement is None:
+            level_decrement = 0
+        self.level_decrement = level_decrement
         self.region = ds.all_data()
         self.cids = [
             ComponentID('{} {}'.format(*f.name), parent=self)
             for f in ds.fields.gas]
+        self._dds = (ds.domain_width / self.shape).to_value(self.units)
+        self._left_edge = self.ds.domain_left_edge.to_value(self.units)
+        self._right_edge = self.ds.domain_right_edge.to_value(self.units)
         w = astropy.wcs.WCS(naxis=3)
-        c = 0.5*(self.grid.left_edge + self.grid.right_edge)
-        c = c.in_units('kpc')
-        w.wcs.cunit = [str(c.units)]*3
-        w.wcs.crpix = 0.5*(np.array(self.grid.shape)+1)
-        w.wcs.cdelt = self.grid.dds.in_units('kpc').d
-        w.wcs.crval = c.d
+        c = 0.5*(self._left_edge + self._right_edge)
+        w.wcs.cunit = [self.units]*3
+        w.wcs.crpix = 0.5*(np.array(self.shape)+1)
+        w.wcs.cdelt = self._dds
+        w.wcs.crval = c
         self.coords = coordinates_from_wcs(w)
         wcids = []
         for i in range(self.ndim):
             label = self.coords.axis_label(i)
             wcids.append(ComponentID(label, parent=self))
         self._world_component_ids = wcids
-        self._dds = (ds.domain_width / self.shape).to_value("code_length")
-        self._left_edge = self.ds.domain_left_edge.to_value("code_length")
-        self._right_edge = self.ds.domain_right_edge.to_value("code_length")
 
     @property
     def label(self):
@@ -58,7 +57,8 @@ class YTGlueData(BaseCartesianData):
     @property
     def shape(self):
         if self._shape is None:
-            refine_factor = self.ds.refine_by**self.ds.index.max_level
+            i = self.ds.index.max_level-self.level_decrement
+            refine_factor = self.ds.refine_by**i
             shp = refine_factor * self.ds.domain_dimensions
             self._shape = tuple(shp.astype("int"))
         return self._shape
@@ -75,34 +75,16 @@ class YTGlueData(BaseCartesianData):
             return ret
         return ret[ax]
 
-    def _slice_args(self, view):
-        index, coord = [(i, v) for i, v in enumerate(view)
-                        if not isinstance(v, slice)][0]
-        coord = self._get_loc(coord)[index]
-        return index, coord
-
-    def _frb_args(self, view, axis):
-        ix = self.ds.coordinates.x_axis[axis]
-        iy = self.ds.coordinates.y_axis[axis]
-        sx = view[ix]
-        sy = view[iy]
-        l, r = sx.start, sx.stop
-        b, t = sy.start, sy.stop
-        w = _steps(sx)
-        h = _steps(sy)
-        bounds = (self._dds[ix]*l + self._left_edge[ix],
-                  self._dds[ix]*r + self._left_edge[ix],
-                  self._dds[iy]*b + self._left_edge[iy],
-                  self._dds[iy]*t + self._left_edge[iy])
-        return bounds, (h, w)
-
+    """
     def get_data(self, cid, view=None):
+        print("hello")
         if view is None:
             nd = self.ndim
         else:
             nd = len([v for v in view if isinstance(v, slice)])
         field = tuple(cid.label.split())
         if nd == 2:
+            print("I'm in get_data")
             axis, coord = self._slice_args(view)
             sl = self.ds.slice(axis, coord)
             frb = FixedResolutionBuffer(sl, *self._frb_args(view, axis))
@@ -117,6 +99,7 @@ class YTGlueData(BaseCartesianData):
                 shape.append((v.stop - v.start)//v.step)
             ag = self.ds.arbitrary_grid(le, re, shape)
             return ag[field].d
+    """
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
@@ -135,14 +118,32 @@ class YTGlueData(BaseCartesianData):
         elif statistic == 'percentile':
             return float(np.percentile(self.region[field], percentile))
 
-    def compute_histogram(self, cids, range=None, bins=None, log=None,
+    def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
         fields = [tuple(cid.label.split()) for cid in cids]
-        profile = yt.create_profile(
-            self.region, fields, ['ones'], n_bins=bins[0],
+        if weights is not None:
+            weights = tuple(weights.label.split())
+        profile = self.region.profile(fields, ['ones'], n_bins=bins[0],
             extrema={fields[0]: range[0]}, logs={fields[0]: log[0]},
-            weight_field=None)
-        return profile['ones']
+            weight_field=weights)
+        return profile['ones'].d
+
+    def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
+                                        target_cid=None, subset_state=None, 
+                                        broadcast=True, cache_id=None):
+        print("I'm in cfrb")
+        view = []
+        print(bounds)
+        for i, bound in enumerate(bounds):
+            if isinstance(bound, tuple):
+                start = (self._get_loc(bound[0], ax=i), self.units)
+                stop = (self._get_loc(bound[1], ax=i), self.units)
+                view.append(slice(start, stop, bound[2]*1j))
+            else:
+                view.append((self._get_loc(bound, ax=i), self.units))
+        print(view)
+        field = tuple(target_cid.label.split())
+        return self.ds.r[view[0],view[1],view[2]][field].d
 
 
 def is_yt_dataset(filename):
@@ -160,7 +161,7 @@ def read_yt(filename):
 
 
 if __name__ == "__main__":
-    ds = yt.load('Enzo_64/DD0043/data0043')
+    ds = yt.load('GasSloshing/sloshing_nomag2_hdf5_plt_cnt_0150')
     def logdensity(field, data):
         return np.log10(data['gas', 'density'])
     ds.add_field(('gas', 'logdensity'), function=logdensity, units='',
@@ -169,9 +170,9 @@ if __name__ == "__main__":
         return np.log10(data['gas', 'temperature'])
     ds.add_field(('gas', 'logtemperature'), function=logtemperature, units='',
                  sampling_type='cell')
-    d1 = YTGlueData(ds)
+    d1 = YTGlueData(ds, level_decrement=2)
     dc = DataCollection([d1])
     ga = GlueApplication(dc)
-    viewer = ga.new_data_viewer(VispyVolumeViewer)
-    viewer.add_data(d1)
+    #viewer = ga.new_data_viewer(VispyVolumeViewer)
+    #viewer.add_data(d1)
     ga.start(maximized=False)
