@@ -131,9 +131,7 @@ class YTGlueData(BaseCartesianData):
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
-        print("I'm in cfrb")
         view = []
-        print(bounds)
         for i, bound in enumerate(bounds):
             if isinstance(bound, tuple):
                 start = (self._get_loc(bound[0], ax=i), self.units)
@@ -141,9 +139,8 @@ class YTGlueData(BaseCartesianData):
                 view.append(slice(start, stop, bound[2]*1j))
             else:
                 view.append((self._get_loc(bound, ax=i), self.units))
-        print(view)
         field = tuple(target_cid.label.split())
-        return self.ds.r[view[0],view[1],view[2]][field].d
+        return self.ds.r[view[0],view[1],view[2]][field].d.T
 
 
 def is_yt_dataset(filename):
