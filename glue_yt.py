@@ -11,16 +11,15 @@ from glue.app.qt import GlueApplication
 
 class YTGlueData(BaseCartesianData):
 
-    def __init__(self, ds, units=None, level_decrement=None):
+    _level_decrement = 2
+
+    def __init__(self, ds, units=None):
         super(YTGlueData, self).__init__()
         self.ds = ds
         if units is None:
             self.units = ds.get_smallest_appropriate_unit(ds.domain_width[0])
         else:
             self.units = units
-        if level_decrement is None:
-            level_decrement = 0
-        self.level_decrement = level_decrement
         self.region = ds.all_data()
         self.cids = [
             ComponentID('{} {}'.format(*f.name), parent=self)
@@ -58,10 +57,13 @@ class YTGlueData(BaseCartesianData):
     @property
     def shape(self):
         if self._shape is None:
-            i = self.ds.index.max_level-self.level_decrement
-            refine_factor = self.ds.refine_by**i
-            shp = refine_factor * self.ds.domain_dimensions
-            self._shape = tuple(shp.astype("int"))
+            if hasattr(ds.index, "max_level"):
+                i = self.ds.index.max_level-self._level_decrement
+                refine_factor = self.ds.refine_by**i
+                shp = refine_factor * self.ds.domain_dimensions
+                self._shape = tuple(shp.astype("int"))
+            else:
+                self._shape = (256,)*3
         return self._shape
 
     def get_kind(self, cid):
@@ -146,13 +148,11 @@ class YTGlueData(BaseCartesianData):
         iy = self.ds.coordinates.y_axis[axis]
         sx = view[ix]
         sy = view[iy]
-        w = sx[2]
-        h = sy[2]
         bounds = (self._dds[ix]*sx[0] + self._left_edge[ix],
                   self._dds[ix]*sx[1] + self._left_edge[ix],
                   self._dds[iy]*sy[0] + self._left_edge[iy],
                   self._dds[iy]*sy[1] + self._left_edge[iy])
-        return bounds, (h, w)
+        return bounds, (sy[2], sx[2])
 
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
@@ -200,7 +200,7 @@ if __name__ == "__main__":
         return np.log10(data['gas', 'temperature'])
     ds.add_field(('gas', 'logtemperature'), function=logtemperature, units='',
                  sampling_type='cell')
-    d1 = YTGlueData(ds, level_decrement=2)
+    d1 = YTGlueData(ds)
     dc = DataCollection([d1])
     ga = GlueApplication(dc)
     #viewer = ga.new_data_viewer(VispyVolumeViewer)
