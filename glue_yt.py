@@ -135,11 +135,14 @@ class YTGlueData(BaseCartesianData):
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
+        print(weights)
         fields = [tuple(cid.label.split()) for cid in cids]
         if weights is not None:
             weights = tuple(weights.label.split())
-        profile = self.region.profile(fields, ['ones'], n_bins=bins[0],
-            extrema={fields[0]: range[0]}, logs={fields[0]: log[0]},
+        extrema = {fd: r for fd, r in zip(fields, range)}
+        logs = {fd: l for fd, l in zip(fields, log)}
+        profile = self.region.profile(fields, ['ones'], n_bins=bins,
+            extrema=extrema, logs=logs,
             weight_field=weights)
         return profile['ones'].d
 
