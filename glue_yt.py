@@ -33,6 +33,7 @@ class YTGlueData(BaseCartesianData):
         w.wcs.crpix = 0.5*(np.array(self.shape)+1)
         w.wcs.cdelt = self.ds.arr(self._dds, "code_length").to_value(self.units)
         w.wcs.crval = c.to_value(self.units)
+        self.wcs = w
         self.coords = coordinates_from_wcs(w)
         wcids = []
         for i in range(self.ndim):
@@ -84,44 +85,24 @@ class YTGlueData(BaseCartesianData):
             return ret
         return ret[ax]
 
-    """
+    def _get_loc_wcs(self, idx, ax):
+        ret = self.wcs.wcs.cdelt[ax]*(idx+1-self.wcs.wcs.crpix[ax])+self.wcs.wcs.crval[ax]
+        return ret
+
     def get_data(self, cid, view=None):
-        print("hello")
-        if view is None:
-            nd = self.ndim
-        else:
-            nd = len([v for v in view if isinstance(v, slice)])
-        field = tuple(cid.label.split())
-        if nd == 2:
-            print("I'm in get_data")
-            axis, coord = self._slice_args(view)
-            sl = self.ds.slice(axis, coord)
-            frb = FixedResolutionBuffer(sl, *self._frb_args(view, axis))
-            return frb[field].d.T
-        elif nd == 3:
-            le = []
-            re = []
-            shape = []
+        if view is not None:
             for i, v in enumerate(view):
-                le.append(self._get_loc(v.start, i))
-                re.append(self._get_loc(v.stop, i))
-                shape.append((v.stop - v.start)//v.step)
-            ag = self.ds.arbitrary_grid(le, re, shape)
-            return ag[field].d
-    """
+                if isinstance(v, slice):
+                    break
+        if cid.label.startswith("World"):
+            return self._get_loc_wcs(np.arange(self.shape[i]), i)
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
                           view=None, random_subset=None):
         field = tuple(cid.label.split())
-        #Get axis
-        axes = {
-            (1,2): "x",
-            (0,2): "y",
-            (0,1): "z"
-            }
         if axis is None:
-            #Compute statistic for all data
+            # Compute statistic for all data
             if statistic == 'minimum':
                 return float(self.region.min(field))
             elif statistic == 'maximum':
@@ -135,26 +116,30 @@ class YTGlueData(BaseCartesianData):
             elif statistic == 'percentile':
                 return float(np.percentile(self.region[field], percentile))
         else:
-            #Compute statistic for a slice along axis tuple
-            if statistic == 'minimum':
-                raise NotImplementedError
-            elif statistic == 'maximum':
-                raise NotImplementedError
-            elif statistic == 'mean':
+            axes = {
+                (1, 2): "x",
+                (0, 2): "y",
+                (0, 1): "z"
+            }
+            # Compute statistic for a slice along axis tuple
+            if statistic == 'mean':
                 weight_field = 'ones'
-            elif statistic == 'median':
-                raise NotImplementedError
             elif statistic == 'sum':
                 weight_field = None
-            elif statistic == 'percentile':
+            else:
                 raise NotImplementedError
-            ax="xyz".index(axes[axis])
+            ax = "xyz".index(axes[axis])
             profile = self.region.profile(axes[axis], field, n_bins=self.shape[ax],
-                                          weight_field=weight_field)
-            return profile[field].d
+                                          weight_field=weight_field, logs={axes[axis]: False},
+                                          extrema={axes[axis]: (self._left_edge[ax],
+                                                                self._right_edge[ax])})
+            p = profile[field].v
+            p[~profile.used] = np.nan
+            return p
 
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
+        # We use a yt profile over "ones" to make the histogram
         fields = [tuple(cid.label.split()) for cid in cids]
         if weights is not None:
             weights = tuple(weights.label.split())
@@ -183,6 +168,7 @@ class YTGlueData(BaseCartesianData):
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
+        print("In cfrb")
         field = tuple(target_cid.label.split())
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
