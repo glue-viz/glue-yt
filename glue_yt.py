@@ -118,26 +118,21 @@ class YTGlueData(BaseCartesianData):
             elif statistic == 'percentile':
                 return float(np.percentile(self.region[field], percentile))
         else:
-            axes = {
-                (1, 2): "x",
-                (0, 2): "y",
-                (0, 1): "z"
-            }
+            bounds = [(0.5, s-0.5, s) for s in self.shape]
+            cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
             # Compute statistic for a slice along axis tuple
-            if statistic == 'mean':
-                weight_field = 'ones'
+            if statistic == 'minimum':
+                return cg.min(axis=axis)
+            elif statistic == 'maximum':
+                return cg.max(axis=axis)
+            elif statistic == 'mean':
+                return cg.mean(axis=axis)
+            elif statistic == 'median':
+                return np.median(cg, axis=axis)
             elif statistic == 'sum':
-                weight_field = None
-            else:
-                raise NotImplementedError
-            ax = "xyz".index(axes[axis])
-            profile = self.region.profile(axes[axis], field, n_bins=self.shape[ax],
-                                          weight_field=weight_field, logs={axes[axis]: False},
-                                          extrema={axes[axis]: (self._left_edge[ax],
-                                                                self._right_edge[ax])})
-            p = profile[field].v
-            p[~profile.used] = np.nan
-            return p
+                return cg.sum(axis=axis)
+            elif statistic == 'percentile':
+                return np.percentile(cg, percentile, axis=axis)
 
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
