@@ -11,8 +11,6 @@ from glue.app.qt import GlueApplication
 
 class YTGlueData(BaseCartesianData):
 
-    _level_decrement = 2
-
     def __init__(self, ds, units=None):
         super(YTGlueData, self).__init__()
         self.ds = ds
@@ -59,12 +57,12 @@ class YTGlueData(BaseCartesianData):
     def shape(self):
         if self._shape is None:
             if hasattr(ds.index, "max_level"):
-                i = self.ds.index.max_level-self._level_decrement
+                i = self.ds.index.max_level
                 refine_factor = self.ds.refine_by**i
                 shp = refine_factor * self.ds.domain_dimensions
                 self._shape = tuple(shp.astype("int"))
             else:
-                self._shape = (256,)*3
+                self._shape = (512,)*3
         return self._shape
 
     def get_kind(self, cid):
@@ -74,7 +72,7 @@ class YTGlueData(BaseCartesianData):
         breakpoint()
 
     def _get_loc(self, global_idx, ax=None):
-        ret = self._left_edge + global_idx*self._dds
+        ret = self._left_edge + (global_idx+0.5)*self._dds
         if ax is None:
             return ret
         return ret[ax]
@@ -97,7 +95,7 @@ class YTGlueData(BaseCartesianData):
             if cid.label.startswith("World"):
                 return self._get_loc_wcs(np.arange(self.shape[i]), i)
             elif cid.label.startswith("Pixel"):
-                return np.arange(self.shape[i])+1
+                return np.arange(self.shape[i])
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
@@ -118,7 +116,7 @@ class YTGlueData(BaseCartesianData):
             elif statistic == 'percentile':
                 return float(np.percentile(self.region[field], percentile))
         else:
-            bounds = [(0.5, s-0.5, s) for s in self.shape]
+            bounds = [(-0.5, s-0.5, s) for s in self.shape]
             cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
             # Compute statistic for a slice along axis tuple
             if statistic == 'minimum':
@@ -156,16 +154,15 @@ class YTGlueData(BaseCartesianData):
         iy = self.ds.coordinates.y_axis[axis]
         sx = view[ix]
         sy = view[iy]
-        bounds = (self._dds[ix]*sx[0] + self._left_edge[ix],
-                  self._dds[ix]*sx[1] + self._left_edge[ix],
-                  self._dds[iy]*sy[0] + self._left_edge[iy],
-                  self._dds[iy]*sy[1] + self._left_edge[iy])
+        bounds = (self._dds[ix]*(sx[0]+0.5) + self._left_edge[ix],
+                  self._dds[ix]*(sx[1]+0.5) + self._left_edge[ix],
+                  self._dds[iy]*(sy[0]+0.5) + self._left_edge[iy],
+                  self._dds[iy]*(sy[1]+0.5) + self._left_edge[iy])
         return bounds, (sy[2], sx[2])
 
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
-        print("In cfrb")
         field = tuple(target_cid.label.split())
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
@@ -184,6 +181,7 @@ class YTGlueData(BaseCartesianData):
                 return ret
             ag = self.ds.arbitrary_grid(le, re, shape)
             return ag[field].d
+
 
 def is_yt_dataset(filename):
     try:
