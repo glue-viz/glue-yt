@@ -100,6 +100,8 @@ class YTGlueData(BaseCartesianData):
                 return self._get_loc_wcs(np.arange(self.shape[i]), i)
             elif cid.label.startswith("Pixel"):
                 return np.arange(self.shape[i])
+        return np.array([self.compute_statistic("minimum", cid),
+                         self.compute_statistic("maximum", cid)])
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
