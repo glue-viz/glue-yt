@@ -114,18 +114,44 @@ class YTGlueData(BaseCartesianData):
                           finite=True, positive=False, percentile=None,
                           view=None, random_subset=None):
         field = tuple(cid.label.split())
-        if statistic == 'minimum':
-            return float(self.region.min(field))
-        elif statistic == 'maximum':
-            return float(self.region.max(field))
-        elif statistic == 'mean':
-            return float(self.region.mean(field))
-        elif statistic == 'median':
-            return float(np.median(self.region[field]))
-        elif statistic == 'sum':
-            return float(self.region.sum(field))
-        elif statistic == 'percentile':
-            return float(np.percentile(self.region[field], percentile))
+        #Get axis
+        axes = {
+            (1,2): "x",
+            (0,2): "y",
+            (0,1): "z"
+            }
+        if axis is None:
+            #Compute statistic for all data
+            if statistic == 'minimum':
+                return float(self.region.min(field))
+            elif statistic == 'maximum':
+                return float(self.region.max(field))
+            elif statistic == 'mean':
+                return float(self.region.mean(field))
+            elif statistic == 'median':
+                return float(np.median(self.region[field]))
+            elif statistic == 'sum':
+                return float(self.region.sum(field))
+            elif statistic == 'percentile':
+                return float(np.percentile(self.region[field], percentile))
+        else:
+            #Compute statistic for a slice along axis tuple
+            if statistic == 'minimum':
+                raise NotImplementedError
+            elif statistic == 'maximum':
+                raise NotImplementedError
+            elif statistic == 'mean':
+                weight_field = 'ones'
+            elif statistic == 'median':
+                raise NotImplementedError
+            elif statistic == 'sum':
+                weight_field = None
+            elif statistic == 'percentile':
+                raise NotImplementedError
+            ax="xyz".index(axes[axis])
+            profile = self.region.profile(axes[axis], field, n_bins=self.shape[ax],
+                                          weight_field=weight_field)
+            return profile[field].d
 
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
