@@ -9,6 +9,10 @@ from glue.config import data_factory
 from glue.app.qt import GlueApplication
 
 
+def cid_to_field(cid):
+    return tuple(cid.label.replace('"','').split(","))
+
+
 class YTGlueData(BaseCartesianData):
 
     def __init__(self, ds, units=None):
@@ -20,7 +24,7 @@ class YTGlueData(BaseCartesianData):
             self.units = units
         self.region = ds.all_data()
         self.cids = [
-            ComponentID('{} {}'.format(*f.name), parent=self)
+            ComponentID('"{}","{}"'.format(*f.name), parent=self)
             for f in ds.fields.gas]
         self._dds = (ds.domain_width / self.shape).d
         self._left_edge = self.ds.domain_left_edge.d
@@ -100,7 +104,7 @@ class YTGlueData(BaseCartesianData):
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
                           view=None, random_subset=None):
-        field = tuple(cid.label.split())
+        field = cid_to_field(cid)
         if axis is None:
             # Compute statistic for all data
             if statistic == 'minimum':
@@ -136,9 +140,9 @@ class YTGlueData(BaseCartesianData):
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
         print(weights)
-        fields = [tuple(cid.label.split()) for cid in cids]
+        fields = [cid_to_field(cid) for cid in cids]
         if weights is not None:
-            weights = tuple(weights.label.split())
+            weights = cid_to_field(weights)
         extrema = {fd: r for fd, r in zip(fields, range)}
         logs = {fd: l for fd, l in zip(fields, log)}
         profile = self.region.profile(fields, ['ones'], n_bins=bins,
@@ -166,7 +170,7 @@ class YTGlueData(BaseCartesianData):
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
-        field = tuple(target_cid.label.split())
+        field = cid_to_field(target_cid)
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
             axis, coord = self._slice_args(bounds)
