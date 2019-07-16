@@ -142,15 +142,16 @@ class YTGlueData(BaseCartesianData):
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
         print(weights)
-        fields = [cid_to_field(cid) for cid in cids]
-        if weights is not None:
-            weights = cid_to_field(weights)
-        extrema = {fd: r for fd, r in zip(fields, range)}
-        logs = {fd: l for fd, l in zip(fields, log)}
-        profile = self.region.profile(fields, ['ones'], n_bins=bins,
-            extrema=extrema, logs=logs,
-            weight_field=weights)
-        return profile['ones'].d
+        bin_fields = [cid_to_field(cid) for cid in cids]
+        if weights is None:
+            field = "ones"
+        else:
+            field = cid_to_field(weights)
+        extrema = {fd: r for fd, r in zip(bin_fields, range)}
+        logs = {fd: l for fd, l in zip(bin_fields, log)}
+        profile = self.region.profile(bin_fields, field, n_bins=bins,
+            extrema=extrema, logs=logs)
+        return profile[field].d
 
     def _slice_args(self, view):
         index, coord = [(i, v) for i, v in enumerate(view)
