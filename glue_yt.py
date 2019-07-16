@@ -94,8 +94,10 @@ class YTGlueData(BaseCartesianData):
             for i, v in enumerate(view):
                 if isinstance(v, slice):
                     break
-        if cid.label.startswith("World"):
-            return self._get_loc_wcs(np.arange(self.shape[i]), i)
+            if cid.label.startswith("World"):
+                return self._get_loc_wcs(np.arange(self.shape[i]), i)
+            elif cid.label.startswith("Pixel"):
+                return np.arange(self.shape[i])+1
 
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
