@@ -2,6 +2,7 @@ import astropy
 import yt
 import numpy as np
 
+from yt.visualization.fixed_resolution import FixedResolutionBuffer
 from glue.core import BaseCartesianData, DataCollection, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
@@ -24,15 +25,15 @@ class YTGlueData(BaseCartesianData):
         self.cids = [
             ComponentID('{} {}'.format(*f.name), parent=self)
             for f in ds.fields.gas]
-        self._dds = (ds.domain_width / self.shape).to_value(self.units)
-        self._left_edge = self.ds.domain_left_edge.to_value(self.units)
-        self._right_edge = self.ds.domain_right_edge.to_value(self.units)
+        self._dds = (ds.domain_width / self.shape).d
+        self._left_edge = self.ds.domain_left_edge.d
+        self._right_edge = self.ds.domain_right_edge.d
         w = astropy.wcs.WCS(naxis=3)
-        c = 0.5*(self._left_edge + self._right_edge)
+        c = 0.5*(self.ds.domain_left_edge + self.ds.domain_right_edge)
         w.wcs.cunit = [self.units]*3
         w.wcs.crpix = 0.5*(np.array(self.shape)+1)
-        w.wcs.cdelt = self._dds
-        w.wcs.crval = c
+        w.wcs.cdelt = self.ds.arr(self._dds, "code_length").to_value(self.units)
+        w.wcs.crval = c.to_value(self.units)
         self.coords = coordinates_from_wcs(w)
         wcids = []
         for i in range(self.ndim):
@@ -69,8 +70,14 @@ class YTGlueData(BaseCartesianData):
     def get_mask(self, subset_state, view=None):
         breakpoint()
 
-    def _get_loc(self, global_index, ax=None):
-        ret = self._left_edge + global_index*self._dds
+    def _get_loc(self, global_idx, ax=None):
+        ret = self._left_edge + global_idx*self._dds
+        if ax is None:
+            return ret
+        return ret[ax]
+
+    def _get_pix(self, loc, ax=None):
+        ret = ((loc-self._left_edge)/self._dds).astype("int")
         if ax is None:
             return ret
         return ret[ax]
@@ -128,20 +135,46 @@ class YTGlueData(BaseCartesianData):
             weight_field=weights)
         return profile['ones'].d
 
+    def _slice_args(self, view):
+        index, coord = [(i, v) for i, v in enumerate(view)
+                        if not isinstance(v, tuple)][0]
+        coord = self._get_loc(coord)[index]
+        return index, coord
+
+    def _frb_args(self, view, axis):
+        ix = self.ds.coordinates.x_axis[axis]
+        iy = self.ds.coordinates.y_axis[axis]
+        sx = view[ix]
+        sy = view[iy]
+        w = sx[2]
+        h = sy[2]
+        bounds = (self._dds[ix]*sx[0] + self._left_edge[ix],
+                  self._dds[ix]*sx[1] + self._left_edge[ix],
+                  self._dds[iy]*sy[0] + self._left_edge[iy],
+                  self._dds[iy]*sy[1] + self._left_edge[iy])
+        return bounds, (h, w)
+
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
-        view = []
-        for i, bound in enumerate(bounds):
-            if isinstance(bound, tuple):
-                start = (self._get_loc(bound[0], ax=i), self.units)
-                stop = (self._get_loc(bound[1], ax=i), self.units)
-                view.append(slice(start, stop, bound[2]*1j))
-            else:
-                view.append((self._get_loc(bound, ax=i), self.units))
         field = tuple(target_cid.label.split())
-        return self.ds.r[view[0],view[1],view[2]][field].d.T
-
+        nd = len([b for b in bounds if isinstance(b, tuple)])
+        if nd == 2:
+            axis, coord = self._slice_args(bounds)
+            sl = self.ds.slice(axis, coord)
+            frb = FixedResolutionBuffer(sl, *self._frb_args(bounds, axis))
+            return frb[field].d.T
+        elif nd == 3:
+            bds = np.array(bounds)
+            le = self._get_loc(bds[:,0])
+            re = self._get_loc(bds[:,1])
+            shape = bds[:,2].astype("int")
+            if np.any(le < self._left_edge) | np.any(re > self._right_edge):
+                ret = np.empty(shape)
+                ret[:] = np.nan
+                return ret
+            ag = self.ds.arbitrary_grid(le, re, shape)
+            return ag[field].d
 
 def is_yt_dataset(filename):
     try:
