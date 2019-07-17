@@ -176,7 +176,7 @@ class YTGlueData(BaseCartesianData):
         logs = {fd: l for fd, l in zip(bin_fields, log)}
         units = {fd: self.units for fd in bin_fields if fd[1] in "xyz"}
         profile = self.region.profile(bin_fields, field, n_bins=bins,
-            extrema=extrema, logs=logs, units=units)
+            extrema=extrema, logs=logs, units=units, weight_field=None)
         return profile[field].d
 
     def _slice_args(self, view):
