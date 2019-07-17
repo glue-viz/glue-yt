@@ -10,6 +10,9 @@ from glue.app.qt import GlueApplication
 
 
 def cid_to_field(cid):
+    if cid.label.startswith("World") or cid.label.startswith("Pixel"):
+        ax = int(cid.label.split()[1])
+        return "index", "xyz"[ax]
     return tuple(cid.label.replace('"','').split(","))
 
 
@@ -157,7 +160,6 @@ class YTGlueData(BaseCartesianData):
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
-        print(weights)
         bin_fields = [cid_to_field(cid) for cid in cids]
         if weights is None:
             field = "ones"
@@ -165,8 +167,9 @@ class YTGlueData(BaseCartesianData):
             field = cid_to_field(weights)
         extrema = {fd: r for fd, r in zip(bin_fields, range)}
         logs = {fd: l for fd, l in zip(bin_fields, log)}
+        units = {fd: self.units for fd in bin_fields if fd[0] == "index"}
         profile = self.region.profile(bin_fields, field, n_bins=bins,
-            extrema=extrema, logs=logs)
+            extrema=extrema, logs=logs, units=units)
         return profile[field].d
 
     def _slice_args(self, view):
