@@ -136,7 +136,7 @@ class YTGlueData(BaseCartesianData):
             bounds = [(-0.5, s-0.5, s) for s in self.shape]
             for i in range(8):
                 si = ei
-                ei = si+ns
+                ei = min(si+ns, self.shape[axes[axis]])
                 bounds[axes[axis]] = (-0.5+si, ei-0.5, ns)
                 cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
                 # Compute statistic for a slice along axis tuple
