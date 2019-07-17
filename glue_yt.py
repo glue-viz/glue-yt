@@ -97,7 +97,8 @@ class YTGlueData(BaseCartesianData):
         return (loc-self._left_edge[ax])/self._dds[ax]-0.5
 
     def _get_loc_wcs(self, idx, ax):
-        ret = self.wcs.wcs.cdelt[ax]*(idx+1-self.wcs.wcs.crpix[ax])+self.wcs.wcs.crval[ax]
+        w = self.wcs.wcs
+        ret = w.cdelt[ax]*(idx+1-w.crpix[ax])+w.crval[ax]
         return ret
 
     def get_data(self, cid, view=None):
