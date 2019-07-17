@@ -110,6 +110,9 @@ class YTGlueData(BaseCartesianData):
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
                           view=None, random_subset=None):
+        axes = {(1, 2): 0,
+                (0, 2): 1,
+                (0, 1): 2}
         field = cid_to_field(cid)
         if axis is None:
             # Compute statistic for all data
@@ -126,21 +129,30 @@ class YTGlueData(BaseCartesianData):
             elif statistic == 'percentile':
                 return float(np.percentile(self.region[field], percentile))
         else:
+            nax = self.shape[axes[axis]]
+            stat = np.zeros(nax)
+            ns = nax // 8
+            ei = 0
             bounds = [(-0.5, s-0.5, s) for s in self.shape]
-            cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
-            # Compute statistic for a slice along axis tuple
-            if statistic == 'minimum':
-                return cg.min(axis=axis)
-            elif statistic == 'maximum':
-                return cg.max(axis=axis)
-            elif statistic == 'mean':
-                return cg.mean(axis=axis)
-            elif statistic == 'median':
-                return np.median(cg, axis=axis)
-            elif statistic == 'sum':
-                return cg.sum(axis=axis)
-            elif statistic == 'percentile':
-                return np.percentile(cg, percentile, axis=axis)
+            for i in range(8):
+                si = ei
+                ei = si+ns
+                bounds[axes[axis]] = (-0.5+si, ei-0.5, ns)
+                cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
+                # Compute statistic for a slice along axis tuple
+                if statistic == 'minimum':
+                    stat[si:ei] = cg.min(axis=axis)
+                elif statistic == 'maximum':
+                    stat[si:ei] = cg.max(axis=axis)
+                elif statistic == 'mean':
+                    stat[si:ei] = cg.mean(axis=axis)
+                elif statistic == 'median':
+                    stat[si:ei] = np.median(cg, axis=axis)
+                elif statistic == 'sum':
+                    stat[si:ei] = cg.sum(axis=axis)
+                elif statistic == 'percentile':
+                    stat[si:ei] = np.percentile(cg, percentile, axis=axis)
+            return stat
 
     def compute_histogram(self, cids, weights=None, range=None, bins=None, log=None,
                           subset_state=None):
