@@ -117,13 +117,11 @@ class YTGlueData(BaseCartesianData):
             bounds = [(-0.5, s-0.5, s) for s in self.shape]
             return self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
 
-    def _get_subset_region(self, field, subset_state = None):
-        if subset_state is not None and field is not None:
-            #if len(subset_state.attributes == 1)
-            print('Reg field = ' + field + 'lo = ' + subset_state.lo + ', hi = ' + subset_state.hi)
-            reg = self.region.include_inside(field, subset_state.lo, subset_state.hi)
+    def _get_subset_region(self, subset_state=None):
+        if subset_state is not None:
+            field = cid_to_field(subset_state.att)
+            reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
         else:
-            print('Reg  == None')
             reg = self.region
         return reg
 
@@ -136,7 +134,7 @@ class YTGlueData(BaseCartesianData):
         field = cid_to_field(cid)
 
         #Get the subset info
-        reg = self._get_subset_region(field, subset_state = subset_state)
+        reg = self._get_subset_region(subset_state)
 
         if axis is None:
             # Compute statistic for all data
@@ -182,7 +180,7 @@ class YTGlueData(BaseCartesianData):
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
         bin_fields = [cid_to_field(cid) for cid in cids]
-        reg = self._get_subset_region(bin_fields[0], subset_state = subset_state)
+        reg = self._get_subset_region(subset_state)
         if weights is None:
             field = "ones"
         else:
@@ -215,7 +213,7 @@ class YTGlueData(BaseCartesianData):
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
         field = cid_to_field(target_cid)
-        reg = self._get_subset_region(field, subset_state = subset_state)
+        reg = self._get_subset_region(subset_state)
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
             axis, coord = self._slice_args(bounds)
