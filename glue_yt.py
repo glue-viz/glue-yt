@@ -10,9 +10,12 @@ from glue.app.qt import GlueApplication
 
 
 def cid_to_field(cid):
-    if cid.label.startswith("World") or cid.label.startswith("Pixel"):
+    if cid.label.startswith("World"):
         ax = int(cid.label.split()[1])
         return "index", "xyz"[ax]
+    if cid.label.startswith("Pixel"):
+        ax = int(cid.label.split()[-1])
+        return "index", "pixel_{}".format("xyz"[ax])
     return tuple(cid.label.replace('"','').split(","))
 
 
@@ -45,6 +48,10 @@ class YTGlueData(BaseCartesianData):
             label = self.coords.axis_label(i)
             wcids.append(ComponentID(label, parent=self))
         self._world_component_ids = wcids
+        for i, ax in enumerate("xyz"):
+            def _pixel_c(field, data):
+                return self._get_pix(data["index", ax].d, ax=i)
+            self.ds.add_field(("index", "pixel_{}".format(ax)), _pixel_c, units="")
 
     @property
     def label(self):
@@ -84,11 +91,8 @@ class YTGlueData(BaseCartesianData):
             return ret
         return ret[ax]
 
-    def _get_pix(self, loc, ax=None):
-        ret = ((loc-self._left_edge)/self._dds).astype("int")
-        if ax is None:
-            return ret
-        return ret[ax]
+    def _get_pix(self, loc, ax):
+        return (loc-self._left_edge[ax])/self._dds[ax]-0.5
 
     def _get_loc_wcs(self, idx, ax):
         ret = self.wcs.wcs.cdelt[ax]*(idx+1-self.wcs.wcs.crpix[ax])+self.wcs.wcs.crval[ax]
@@ -167,7 +171,7 @@ class YTGlueData(BaseCartesianData):
             field = cid_to_field(weights)
         extrema = {fd: r for fd, r in zip(bin_fields, range)}
         logs = {fd: l for fd, l in zip(bin_fields, log)}
-        units = {fd: self.units for fd in bin_fields if fd[0] == "index"}
+        units = {fd: self.units for fd in bin_fields if fd[1] in "xyz"}
         profile = self.region.profile(bin_fields, field, n_bins=bins,
             extrema=extrema, logs=logs, units=units)
         return profile[field].d
