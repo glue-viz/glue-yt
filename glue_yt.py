@@ -7,7 +7,7 @@ from glue.core import BaseCartesianData, DataCollection, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
 from glue.app.qt import GlueApplication
-
+from glue.core import Subset
 
 def cid_to_field(cid):
     if cid is None:
@@ -117,6 +117,16 @@ class YTGlueData(BaseCartesianData):
             bounds = [(-0.5, s-0.5, s) for s in self.shape]
             return self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
 
+    def _get_subset_region(self, field, subset_state = None):
+        if subset_state is not None and field is not None:
+            #if len(subset_state.attributes == 1)
+            print('Reg field = ' + field + 'lo = ' + subset_state.lo + ', hi = ' + subset_state.hi)
+            reg = self.region.include_inside(field, subset_state.lo, subset_state.hi)
+        else:
+            print('Reg  == None')
+            reg = self.region
+        return reg
+
     def compute_statistic(self, statistic, cid, subset_state=None, axis=None,
                           finite=True, positive=False, percentile=None,
                           view=None, random_subset=None):
@@ -124,20 +134,24 @@ class YTGlueData(BaseCartesianData):
                 (0, 2): 1,
                 (0, 1): 2}
         field = cid_to_field(cid)
+
+        #Get the subset info
+        reg = self._get_subset_region(field, subset_state = subset_state)
+
         if axis is None:
             # Compute statistic for all data
             if statistic == 'minimum':
-                return float(self.region.min(field))
+                return float(reg.min(field))
             elif statistic == 'maximum':
-                return float(self.region.max(field))
+                return float(reg.max(field))
             elif statistic == 'mean':
-                return float(self.region.mean(field))
+                return float(reg.mean(field))
             elif statistic == 'median':
-                return float(np.median(self.region[field]))
+                return float(np.median(reg[field]))
             elif statistic == 'sum':
-                return float(self.region.sum(field))
+                return float(reg.sum(field))
             elif statistic == 'percentile':
-                return float(np.percentile(self.region[field], percentile))
+                return float(np.percentile(reg[field], percentile))
         else:
             nax = self.shape[axes[axis]]
             stat = np.zeros(nax)
@@ -168,6 +182,7 @@ class YTGlueData(BaseCartesianData):
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
         bin_fields = [cid_to_field(cid) for cid in cids]
+        reg = self._get_subset_region(bin_fields[0], subset_state = subset_state)
         if weights is None:
             field = "ones"
         else:
@@ -175,7 +190,7 @@ class YTGlueData(BaseCartesianData):
         extrema = {fd: r for fd, r in zip(bin_fields, range)}
         logs = {fd: l for fd, l in zip(bin_fields, log)}
         units = {fd: self.units for fd in bin_fields if fd[1] in "xyz"}
-        profile = self.region.profile(bin_fields, field, n_bins=bins,
+        profile = reg.profile(bin_fields, field, n_bins=bins,
             extrema=extrema, logs=logs, units=units, weight_field=None)
         return profile[field].d
 
@@ -200,10 +215,11 @@ class YTGlueData(BaseCartesianData):
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
         field = cid_to_field(target_cid)
+        reg = self._get_subset_region(field, subset_state = subset_state)
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
             axis, coord = self._slice_args(bounds)
-            sl = self.ds.slice(axis, coord)
+            sl = self.ds.slice(axis, coord, data_source = reg)
             frb = FixedResolutionBuffer(sl, *self._frb_args(bounds, axis))
             return frb[field].d.T
         elif nd == 3:
