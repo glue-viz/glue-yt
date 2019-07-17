@@ -10,6 +10,8 @@ from glue.app.qt import GlueApplication
 
 
 def cid_to_field(cid):
+    if cid is None:
+        return
     if cid.label.startswith("World"):
         ax = int(cid.label.split()[1])
         return "index", "xyz"[ax]
@@ -55,7 +57,7 @@ class YTGlueData(BaseCartesianData):
 
     @property
     def label(self):
-        return str(ds)
+        return str(self.ds)
 
     @property
     def main_components(self):
