@@ -232,17 +232,7 @@ def read_yt(filename):
 
 if __name__ == "__main__":
     ds = yt.load('GasSloshing/sloshing_nomag2_hdf5_plt_cnt_0150')
-    def logdensity(field, data):
-        return np.log10(data['gas', 'density'])
-    ds.add_field(('gas', 'logdensity'), function=logdensity, units='',
-                 sampling_type='cell')
-    def logtemperature(field, data):
-        return np.log10(data['gas', 'temperature'])
-    ds.add_field(('gas', 'logtemperature'), function=logtemperature, units='',
-                 sampling_type='cell')
     d1 = YTGlueData(ds)
     dc = DataCollection([d1])
     ga = GlueApplication(dc)
-    #viewer = ga.new_data_viewer(VispyVolumeViewer)
-    #viewer.add_data(d1)
     ga.start(maximized=False)
