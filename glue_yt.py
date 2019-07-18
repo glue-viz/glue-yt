@@ -8,6 +8,7 @@ from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
 from glue.app.qt import GlueApplication
 from glue.core import Subset
+from re import sub
 
 def cid_to_field(cid):
     if cid is None:
@@ -118,9 +119,14 @@ class YTGlueData(BaseCartesianData):
             return self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
 
     def _get_subset_region(self, subset_state=None):
+        print(str(subset_state) + ' in GSR')
         if subset_state is not None:
-            field = cid_to_field(subset_state.att)
-            reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
+            try:
+                roi = subset_state.roi
+                reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
+            except AttributeError: 
+                field = cid_to_field(subset_state.att)
+                reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
         else:
             reg = self.region
         return reg
@@ -134,6 +140,7 @@ class YTGlueData(BaseCartesianData):
         field = cid_to_field(cid)
 
         #Get the subset info
+        print('Calling GSR in compute_statistic')
         reg = self._get_subset_region(subset_state)
 
         if axis is None:
@@ -180,6 +187,7 @@ class YTGlueData(BaseCartesianData):
                           subset_state=None):
         # We use a yt profile over "ones" to make the histogram
         bin_fields = [cid_to_field(cid) for cid in cids]
+        print('Calling GSR in compute_histogram')
         reg = self._get_subset_region(subset_state)
         if weights is None:
             field = "ones"
@@ -212,14 +220,26 @@ class YTGlueData(BaseCartesianData):
     def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
                                         target_cid=None, subset_state=None, 
                                         broadcast=True, cache_id=None):
+        print(str(subset_state) + ' in CFRB')
+        #Return data FRB slice if subset is None, else return mask of subset 
+        
+        if target_cid is None and subset_state is None:
+            raise ValueError("Either target_cid or subset_state should be specified")
+
+        for bound in bounds:
+            if isinstance(bound, tuple) and bound[2] < 1:
+                raise ValueError("Number of steps in bounds should be >=1")
+
         field = cid_to_field(target_cid)
+        print('Calling GSR in compute_statistic in compute_FRB')
         reg = self._get_subset_region(subset_state)
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
             axis, coord = self._slice_args(bounds)
             sl = self.ds.slice(axis, coord, data_source = reg)
             frb = FixedResolutionBuffer(sl, *self._frb_args(bounds, axis))
-            return frb[field].d.T
+            if subset_state is None:
+                return frb[field].d.T
         elif nd == 3:
             bds = np.array(bounds)
             le = self._get_loc(bds[:,0])
@@ -230,9 +250,23 @@ class YTGlueData(BaseCartesianData):
                 ret[:] = np.nan
                 return ret
             ag = self.ds.arbitrary_grid(le, re, shape)
-            return ag[field].d
-
-
+            if subset_state is None:
+                return ag[field].d
+        
+        try:
+            att_field = sub('"','', subset_state.att.label).split(',')[1]
+            cgatt = frb[att_field].d.T
+            frb_mask = frb['zeros'].d.T
+            #Possibly change to yt function include_inside in the future
+            #Use other yt data.containers.include... fcns for other sets of logic
+            wr=np.where(np.logical_and(cgatt>= subset_state.lo, cgatt<=subset_state.hi))
+            frb_mask[wr[0], wr[1]] = 1
+            return frb_mask
+        except AttributeError:
+            #Should never get here.
+            print("Returning Nothing in cfrb")
+            return
+            
 def is_yt_dataset(filename):
     try:
         yt.load(filename)
@@ -245,7 +279,6 @@ def is_yt_dataset(filename):
 def read_yt(filename):
     ds = yt.load(filename)
     return YTGlueData(ds)
-
 
 if __name__ == "__main__":
     ds = yt.load('GasSloshing/sloshing_nomag2_hdf5_plt_cnt_0150')
