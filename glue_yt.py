@@ -24,18 +24,20 @@ def cid_to_field(cid):
 
 class YTGlueData(BaseCartesianData):
 
-    def __init__(self, ds, units=None):
+    def __init__(self, ds_all, units=None):
         super(YTGlueData, self).__init__()
-        self.ds = ds
+        self.ds_all = ds_all
+        self.ds = ds_all[0]
+        self._current_step = 0
         if units is None:
-            self.units = ds.get_smallest_appropriate_unit(ds.domain_width[0])
+            self.units = self.ds.get_smallest_appropriate_unit(self.ds.domain_width[0])
         else:
             self.units = units
-        self.region = ds.all_data()
+        self.region = self.ds.all_data()
         self.cids = [
             ComponentID('"{}","{}"'.format(*f.name), parent=self)
-            for f in ds.fields.gas]
-        self._dds = (ds.domain_width / self.shape).d
+            for f in self.ds.fields.gas]
+        self._dds = (self.ds.domain_width / self.shape).d
         self._left_edge = self.ds.domain_left_edge.d
         self._right_edge = self.ds.domain_right_edge.d
         w = astropy.wcs.WCS(naxis=3)
@@ -57,6 +59,16 @@ class YTGlueData(BaseCartesianData):
             self.ds.add_field(("index", "pixel_{}".format(ax)), _pixel_c, units="")
 
     @property
+    def current_step(self):
+        return self._current_step
+
+    @current_step.setter
+    def current_step(self, value):
+        self._current_step = value
+        self.ds = self.ds_all[value]
+        self.region = self.ds.all_data()
+
+    @property
     def label(self):
         return str(self.ds)
 
@@ -73,7 +85,7 @@ class YTGlueData(BaseCartesianData):
     @property
     def shape(self):
         if self._shape is None:
-            if hasattr(ds.index, "max_level"):
+            if hasattr(self.ds.index, "max_level"):
                 i = self.ds.index.max_level
                 refine_factor = self.ds.refine_by**i
                 shp = refine_factor * self.ds.domain_dimensions
@@ -124,7 +136,7 @@ class YTGlueData(BaseCartesianData):
             try:
                 roi = subset_state.roi
                 reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
-            except AttributeError: 
+            except AttributeError:
                 field = cid_to_field(subset_state.att)
                 reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
         else:
@@ -217,12 +229,12 @@ class YTGlueData(BaseCartesianData):
                   self._dds[iy]*(sy[1]+0.5) + self._left_edge[iy])
         return bounds, (sy[2], sx[2])
 
-    def compute_fixed_resolution_buffer(self, bounds, target_data=None, 
-                                        target_cid=None, subset_state=None, 
+    def compute_fixed_resolution_buffer(self, bounds, target_data=None,
+                                        target_cid=None, subset_state=None,
                                         broadcast=True, cache_id=None):
         print(str(subset_state) + ' in CFRB')
-        #Return data FRB slice if subset is None, else return mask of subset 
-        
+        #Return data FRB slice if subset is None, else return mask of subset
+
         if target_cid is None and subset_state is None:
             raise ValueError("Either target_cid or subset_state should be specified")
 
@@ -252,7 +264,7 @@ class YTGlueData(BaseCartesianData):
             ag = self.ds.arbitrary_grid(le, re, shape)
             if subset_state is None:
                 return ag[field].d
-        
+
         try:
             att_field = sub('"','', subset_state.att.label).split(',')[1]
             cgatt = frb[att_field].d.T
@@ -266,7 +278,7 @@ class YTGlueData(BaseCartesianData):
             #Should never get here.
             print("Returning Nothing in cfrb")
             return
-            
+
 def is_yt_dataset(filename):
     try:
         yt.load(filename)
@@ -281,8 +293,8 @@ def read_yt(filename):
     return YTGlueData(ds)
 
 if __name__ == "__main__":
-    ds = yt.load('GasSloshing/sloshing_nomag2_hdf5_plt_cnt_0150')
-    d1 = YTGlueData(ds)
+    dsloaded = yt.load('DD????/data????')
+    d1 = YTGlueData(dsloaded)
     dc = DataCollection([d1])
     ga = GlueApplication(dc)
     ga.start(maximized=False)
