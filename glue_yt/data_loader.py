@@ -1,5 +1,6 @@
 import astropy
 import yt
+from yt.data_objects.time_series import DatasetSeries
 import numpy as np
 
 from yt.visualization.fixed_resolution import FixedResolutionBuffer
@@ -279,6 +280,7 @@ class YTGlueData(BaseCartesianData):
             print("Returning Nothing in cfrb")
             return
 
+
 def is_yt_dataset(filename):
     try:
         yt.load(filename)
@@ -289,12 +291,5 @@ def is_yt_dataset(filename):
 
 @data_factory('yt dataset', is_yt_dataset)
 def read_yt(filename):
-    ds = yt.load(filename)
+    ds = DatasetSeries(filename)
     return YTGlueData(ds)
-
-if __name__ == "__main__":
-    dsloaded = yt.load('DD????/data????')
-    d1 = YTGlueData(dsloaded)
-    dc = DataCollection([d1])
-    ga = GlueApplication(dc)
-    ga.start(maximized=False)
