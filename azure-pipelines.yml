@@ -1,14 +1,14 @@
 resources:
   repositories:
-  - repository: glue
+  - repository: OpenAstronomy
     type: github
     endpoint: glue-viz
-    name: glue-viz/azure-pipelines-templates
+    name: OpenAstronomy/azure-pipelines-templates
     ref: master
 
 jobs:
 
-- template: run-tox-env.yml@glue
+- template: run-tox-env.yml@OpenAstronomy
   parameters:
     envs:
 
