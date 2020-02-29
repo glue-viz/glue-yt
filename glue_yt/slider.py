@@ -1,7 +1,6 @@
 import os
-from qtpy import QtWidgets, compat
+from qtpy import QtWidgets
 from glue.utils.qt import load_ui
-from glue.utils import nonpartial
 from glue.config import menubar_plugin
 from glue.core.message import NumericalDataChangedMessage
 

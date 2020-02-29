@@ -1,15 +1,15 @@
+from re import sub
+
 import astropy
+import numpy as np
 import yt
 from yt.data_objects.time_series import DatasetSeries
-import numpy as np
-
 from yt.visualization.fixed_resolution import FixedResolutionBuffer
-from glue.core import BaseCartesianData, DataCollection, ComponentID
+
+from glue.core import BaseCartesianData, ComponentID
 from glue.core.coordinates import coordinates_from_wcs
 from glue.config import data_factory
-from glue.app.qt import GlueApplication
-from glue.core import Subset
-from re import sub
+
 
 def cid_to_field(cid):
     if cid is None:
@@ -20,7 +20,7 @@ def cid_to_field(cid):
     if cid.label.startswith("Pixel"):
         ax = int(cid.label.split()[-1])
         return "index", "pixel_{}".format("xyz"[ax])
-    return tuple(cid.label.replace('"','').split(","))
+    return tuple(cid.label.replace('"', '').split(","))
 
 
 class YTGlueData(BaseCartesianData):
@@ -42,9 +42,9 @@ class YTGlueData(BaseCartesianData):
         self._left_edge = self.ds.domain_left_edge.d
         self._right_edge = self.ds.domain_right_edge.d
         w = astropy.wcs.WCS(naxis=3)
-        c = 0.5*(self.ds.domain_left_edge + self.ds.domain_right_edge)
-        w.wcs.cunit = [self.units]*3
-        w.wcs.crpix = 0.5*(np.array(self.shape)+1)
+        c = 0.5 * (self.ds.domain_left_edge + self.ds.domain_right_edge)
+        w.wcs.cunit = [self.units] * 3
+        w.wcs.crpix = 0.5 * (np.array(self.shape) + 1)
         w.wcs.cdelt = self.ds.arr(self._dds, "code_length").to_value(self.units)
         w.wcs.crval = c.to_value(self.units)
         self.wcs = w
@@ -92,7 +92,7 @@ class YTGlueData(BaseCartesianData):
                 shp = refine_factor * self.ds.domain_dimensions
                 self._shape = tuple(shp.astype("int"))
             else:
-                self._shape = (512,)*3
+                self._shape = (512,) * 3
         return self._shape
 
     def get_kind(self, cid):
@@ -102,17 +102,17 @@ class YTGlueData(BaseCartesianData):
         breakpoint()
 
     def _get_loc(self, global_idx, ax=None):
-        ret = self._left_edge + (global_idx+0.5)*self._dds
+        ret = self._left_edge + (global_idx + 0.5) * self._dds
         if ax is None:
             return ret
         return ret[ax]
 
     def _get_pix(self, loc, ax):
-        return (loc-self._left_edge[ax])/self._dds[ax]-0.5
+        return (loc - self._left_edge[ax]) / self._dds[ax] - 0.5
 
     def _get_loc_wcs(self, idx, ax):
         w = self.wcs.wcs
-        ret = w.cdelt[ax]*(idx+1-w.crpix[ax])+w.crval[ax]
+        ret = w.cdelt[ax] * (idx + 1 - w.crpix[ax]) + w.crval[ax]
         return ret
 
     def get_data(self, cid, view=None):
@@ -128,18 +128,14 @@ class YTGlueData(BaseCartesianData):
             return np.array([self.compute_statistic("minimum", cid),
                              self.compute_statistic("maximum", cid)])
         else:
-            bounds = [(-0.5, s-0.5, s) for s in self.shape]
+            bounds = [(-0.5, s - 0.5, s) for s in self.shape]
             return self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
 
     def _get_subset_region(self, subset_state=None):
         print(str(subset_state) + ' in GSR')
         if subset_state is not None:
-            try:
-                roi = subset_state.roi
-                reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
-            except AttributeError:
-                field = cid_to_field(subset_state.att)
-                reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
+            field = cid_to_field(subset_state.att)
+            reg = self.region.include_inside(field[1], subset_state.lo, subset_state.hi)
         else:
             reg = self.region
         return reg
@@ -152,7 +148,7 @@ class YTGlueData(BaseCartesianData):
                 (0, 1): 2}
         field = cid_to_field(cid)
 
-        #Get the subset info
+        # Get the subset info
         print('Calling GSR in compute_statistic')
         reg = self._get_subset_region(subset_state)
 
@@ -175,11 +171,11 @@ class YTGlueData(BaseCartesianData):
             stat = np.zeros(nax)
             ns = nax // 8
             ei = 0
-            bounds = [(-0.5, s-0.5, s) for s in self.shape]
+            bounds = [(-0.5, s - 0.5, s) for s in self.shape]
             for i in range(8):
                 si = ei
-                ei = min(si+ns, self.shape[axes[axis]])
-                bounds[axes[axis]] = (-0.5+si, ei-0.5, ns)
+                ei = min(si + ns, self.shape[axes[axis]])
+                bounds[axes[axis]] = (-0.5 + si, ei - 0.5, ns)
                 cg = self.compute_fixed_resolution_buffer(bounds, target_cid=cid)
                 # Compute statistic for a slice along axis tuple
                 if statistic == 'minimum':
@@ -210,7 +206,7 @@ class YTGlueData(BaseCartesianData):
         logs = {fd: l for fd, l in zip(bin_fields, log)}
         units = {fd: self.units for fd in bin_fields if fd[1] in "xyz"}
         profile = reg.profile(bin_fields, field, n_bins=bins,
-            extrema=extrema, logs=logs, units=units, weight_field=None)
+                              extrema=extrema, logs=logs, units=units, weight_field=None)
         return profile[field].d
 
     def _slice_args(self, view):
@@ -224,17 +220,17 @@ class YTGlueData(BaseCartesianData):
         iy = self.ds.coordinates.y_axis[axis]
         sx = view[ix]
         sy = view[iy]
-        bounds = (self._dds[ix]*(sx[0]+0.5) + self._left_edge[ix],
-                  self._dds[ix]*(sx[1]+0.5) + self._left_edge[ix],
-                  self._dds[iy]*(sy[0]+0.5) + self._left_edge[iy],
-                  self._dds[iy]*(sy[1]+0.5) + self._left_edge[iy])
+        bounds = (self._dds[ix] * (sx[0] + 0.5) + self._left_edge[ix],
+                  self._dds[ix] * (sx[1] + 0.5) + self._left_edge[ix],
+                  self._dds[iy] * (sy[0] + 0.5) + self._left_edge[iy],
+                  self._dds[iy] * (sy[1] + 0.5) + self._left_edge[iy])
         return bounds, (sy[2], sx[2])
 
     def compute_fixed_resolution_buffer(self, bounds, target_data=None,
                                         target_cid=None, subset_state=None,
                                         broadcast=True, cache_id=None):
         print(str(subset_state) + ' in CFRB')
-        #Return data FRB slice if subset is None, else return mask of subset
+        # Return data FRB slice if subset is None, else return mask of subset
 
         if target_cid is None and subset_state is None:
             raise ValueError("Either target_cid or subset_state should be specified")
@@ -249,15 +245,15 @@ class YTGlueData(BaseCartesianData):
         nd = len([b for b in bounds if isinstance(b, tuple)])
         if nd == 2:
             axis, coord = self._slice_args(bounds)
-            sl = self.ds.slice(axis, coord, data_source = reg)
+            sl = self.ds.slice(axis, coord, data_source=reg)
             frb = FixedResolutionBuffer(sl, *self._frb_args(bounds, axis))
             if subset_state is None:
                 return frb[field].d.T
         elif nd == 3:
             bds = np.array(bounds)
-            le = self._get_loc(bds[:,0])
-            re = self._get_loc(bds[:,1])
-            shape = bds[:,2].astype("int")
+            le = self._get_loc(bds[:, 0])
+            re = self._get_loc(bds[:, 1])
+            shape = bds[:, 2].astype("int")
             if np.any(le < self._left_edge) | np.any(re > self._right_edge):
                 ret = np.empty(shape)
                 ret[:] = np.nan
@@ -267,16 +263,16 @@ class YTGlueData(BaseCartesianData):
                 return ag[field].d
 
         try:
-            att_field = sub('"','', subset_state.att.label).split(',')[1]
+            att_field = sub('"', '', subset_state.att.label).split(',')[1]
             cgatt = frb[att_field].d.T
             frb_mask = frb['zeros'].d.T
-            #Possibly change to yt function include_inside in the future
-            #Use other yt data.containers.include... fcns for other sets of logic
-            wr=np.where(np.logical_and(cgatt>= subset_state.lo, cgatt<=subset_state.hi))
+            # Possibly change to yt function include_inside in the future
+            # Use other yt data.containers.include... fcns for other sets of logic
+            wr = np.where(np.logical_and(cgatt >= subset_state.lo, cgatt <= subset_state.hi))
             frb_mask[wr[0], wr[1]] = 1
             return frb_mask
         except AttributeError:
-            #Should never get here.
+            # Should never get here.
             print("Returning Nothing in cfrb")
             return
 
