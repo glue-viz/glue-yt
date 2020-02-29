@@ -1,0 +1,24 @@
+resources:
+  repositories:
+  - repository: glue
+    type: github
+    endpoint: glue-viz
+    name: glue-viz/azure-pipelines-templates
+    ref: master
+
+jobs:
+
+- template: run-tox-env.yml@glue
+  parameters:
+    envs:
+
+    - linux: codestyle
+
+    - linux: py36-test
+    - linux: py37-test
+
+    - windows: py36-test
+    - windows: py37-test
+
+    - macosx: py36-test
+    - macosx: py37-test
